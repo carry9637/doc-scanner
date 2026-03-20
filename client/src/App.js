@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
 import FileUpload from "./components/FileUpload";
 import ResultPanel from "./components/ResultPanel";
@@ -12,6 +12,7 @@ function App() {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [serverReady, setServerReady] = useState(false);
 
   // ── Results state ────────────────────────────────────────────────────────
   const [result, setResult] = useState(null);
@@ -22,6 +23,22 @@ function App() {
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailResult, setEmailResult] = useState(null);
   // emailResult shape: { answer, email_body, status }
+
+  // ── Wake up Render server on page load ───────────────────────────────────
+  useEffect(() => {
+    axios
+      .get(`${API}/health`, { timeout: 90000 })
+      .then(() => setServerReady(true))
+      .catch(() => {
+        // Retry once more after 3 seconds
+        setTimeout(() => {
+          axios
+            .get(`${API}/health`, { timeout: 90000 })
+            .then(() => setServerReady(true))
+            .catch(() => setServerReady(false));
+        }, 3000);
+      });
+  }, []);
 
   // ── Handler: analyse document ────────────────────────────────────────────
   const handleAnalyse = async () => {
@@ -37,8 +54,8 @@ function App() {
     formData.append("file", file);
     formData.append("question", question);
 
-    // Retry up to 2 times (handles Render free-tier cold starts)
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    // Retry up to 3 times (handles Render free-tier cold starts)
+    for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         const { data } = await axios.post(`${API}/upload`, formData, {
           headers: { "Content-Type": "multipart/form-data" },
@@ -48,16 +65,17 @@ function App() {
         setLoading(false);
         return;
       } catch (err) {
-        if (attempt === 2) {
-          setError(
+        if (attempt === 3) {
+          const msg =
             err.response?.data?.error ||
-              (err.code === "ECONNABORTED"
-                ? "Server is waking up — please try again in a few seconds."
-                : "Failed to analyse document. Please try again."),
-          );
+            (err.code === "ECONNABORTED"
+              ? "Request timed out. Server may be starting up — please wait 30 seconds and try again."
+              : err.code === "ERR_NETWORK"
+                ? "Network error — check your internet connection and try again."
+                : `Failed to analyse document (${err.message}). Please try again.`);
+          setError(msg);
         }
-        // Brief pause before retry
-        await new Promise((r) => setTimeout(r, 2000));
+        await new Promise((r) => setTimeout(r, 3000));
       }
     }
     setLoading(false);
@@ -102,6 +120,32 @@ function App() {
       </nav>
 
       <main className="max-w-5xl mx-auto px-6 py-10 space-y-8">
+        {/* ── Server Status ── */}
+        {!serverReady && (
+          <div className="bg-yellow-500/20 border border-yellow-500/50 text-yellow-300 rounded-xl px-5 py-3 text-sm flex items-center gap-2">
+            <svg
+              className="animate-spin h-4 w-4"
+              viewBox="0 0 24 24"
+              fill="none"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8v8H4z"
+              />
+            </svg>
+            Waking up server… This may take up to 60 seconds on first visit.
+          </div>
+        )}
+
         {/* ── Upload Section ── */}
         <FileUpload
           file={file}
@@ -110,6 +154,7 @@ function App() {
           setQuestion={setQuestion}
           onSubmit={handleAnalyse}
           loading={loading}
+          serverReady={serverReady}
         />
 
         {/* ── Error Banner ── */}

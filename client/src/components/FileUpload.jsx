@@ -8,6 +8,7 @@ function FileUpload({
   setQuestion,
   onSubmit,
   loading,
+  serverReady,
 }) {
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
@@ -65,7 +66,7 @@ function FileUpload({
       {/* Submit */}
       <button
         onClick={onSubmit}
-        disabled={loading}
+        disabled={loading || !serverReady}
         className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-white font-semibold py-3 rounded-xl text-sm"
       >
         {loading ? (
@@ -91,6 +92,8 @@ function FileUpload({
             </svg>
             Analysing…
           </span>
+        ) : !serverReady ? (
+          "⏳ Connecting to server…"
         ) : (
           "🔍 Analyse Document"
         )}
