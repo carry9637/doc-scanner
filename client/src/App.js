@@ -33,22 +33,34 @@ function App() {
     setEmailResult(null);
     setLoading(true);
 
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("question", question);
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("question", question);
 
-      const { data } = await axios.post(`${API}/upload`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-        timeout: 120000, // 2 min – Render free tier cold start takes ~60s
-      });
-
-      setResult(data);
-    } catch (err) {
-      setError(err.response?.data?.error || "Failed to analyse document.");
-    } finally {
-      setLoading(false);
+    // Retry up to 2 times (handles Render free-tier cold starts)
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const { data } = await axios.post(`${API}/upload`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+          timeout: 120000,
+        });
+        setResult(data);
+        setLoading(false);
+        return;
+      } catch (err) {
+        if (attempt === 2) {
+          setError(
+            err.response?.data?.error ||
+              (err.code === "ECONNABORTED"
+                ? "Server is waking up — please try again in a few seconds."
+                : "Failed to analyse document. Please try again."),
+          );
+        }
+        // Brief pause before retry
+        await new Promise((r) => setTimeout(r, 2000));
+      }
     }
+    setLoading(false);
   };
 
   // ── Handler: send alert email via n8n ────────────────────────────────────
