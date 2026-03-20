@@ -4,7 +4,7 @@ import FileUpload from "./components/FileUpload";
 import ResultPanel from "./components/ResultPanel";
 import EmailSender from "./components/EmailSender";
 
-const API = process.env.REACT_APP_API_URL ? "/api" : "http://localhost:5000";
+const API = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
 function App() {
   // ── Upload / Analysis state ──────────────────────────────────────────────
@@ -50,28 +50,39 @@ function App() {
     setEmailResult(null);
     setLoading(true);
 
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("question", question);
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("question", question);
 
-      const response = await fetch(`${API}/upload`, {
-        method: "POST",
-        body: formData,
-      });
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API}/upload`);
+    xhr.timeout = 120000;
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `Server error (${response.status})`);
-      }
-
-      const data = await response.json();
-      setResult(data);
-    } catch (err) {
-      setError(`[${API}] ${err.message}`);
-    } finally {
+    xhr.onload = () => {
       setLoading(false);
-    }
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status === 200 && data.success) {
+          setResult(data);
+        } else {
+          setError(data.error || `Server error (${xhr.status})`);
+        }
+      } catch {
+        setError(`Invalid response from server (${xhr.status})`);
+      }
+    };
+
+    xhr.onerror = () => {
+      setLoading(false);
+      setError(`Network error uploading to ${API}. Status: ${xhr.status}, ReadyState: ${xhr.readyState}`);
+    };
+
+    xhr.ontimeout = () => {
+      setLoading(false);
+      setError("Request timed out. Server may be starting up — wait 30s and try again.");
+    };
+
+    xhr.send(formData);
   };
 
   // ── Handler: send alert email via n8n ────────────────────────────────────
