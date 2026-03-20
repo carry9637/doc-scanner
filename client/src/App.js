@@ -58,7 +58,6 @@ function App() {
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         const { data } = await axios.post(`${API}/upload`, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
           timeout: 120000,
         });
         setResult(data);
