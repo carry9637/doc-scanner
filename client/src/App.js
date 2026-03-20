@@ -50,34 +50,28 @@ function App() {
     setEmailResult(null);
     setLoading(true);
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("question", question);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("question", question);
 
-    // Retry up to 3 times (handles Render free-tier cold starts)
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        const { data } = await axios.post(`${API}/upload`, formData, {
-          timeout: 120000,
-        });
-        setResult(data);
-        setLoading(false);
-        return;
-      } catch (err) {
-        if (attempt === 3) {
-          const msg =
-            err.response?.data?.error ||
-            (err.code === "ECONNABORTED"
-              ? "Request timed out. Server may be starting up — please wait 30 seconds and try again."
-              : err.code === "ERR_NETWORK"
-                ? "Network error — check your internet connection and try again."
-                : `Failed to analyse document (${err.message}). Please try again.`);
-          setError(msg);
-        }
-        await new Promise((r) => setTimeout(r, 3000));
+      const response = await fetch(`${API}/upload`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `Server error (${response.status})`);
       }
+
+      const data = await response.json();
+      setResult(data);
+    } catch (err) {
+      setError(`[${API}] ${err.message}`);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   // ── Handler: send alert email via n8n ────────────────────────────────────
