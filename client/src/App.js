@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
 import FileUpload from "./components/FileUpload";
 import ResultPanel from "./components/ResultPanel";
 import EmailSender from "./components/EmailSender";
 
-const API = process.env.REACT_APP_API_URL || "http://localhost:5000";
+// In production, use Vercel proxy (/api) to avoid CORS on mobile browsers.
+// Locally, hit the Express server directly.
+const IS_PROD = window.location.hostname !== "localhost";
+const API = IS_PROD ? "/api" : "http://localhost:5000";
 
 function App() {
   // ── Upload / Analysis state ──────────────────────────────────────────────
@@ -26,18 +28,15 @@ function App() {
 
   // ── Wake up Render server on page load ───────────────────────────────────
   useEffect(() => {
-    axios
-      .get(`${API}/health`, { timeout: 90000 })
-      .then(() => setServerReady(true))
-      .catch(() => {
-        // Retry once more after 3 seconds
-        setTimeout(() => {
-          axios
-            .get(`${API}/health`, { timeout: 90000 })
-            .then(() => setServerReady(true))
-            .catch(() => setServerReady(false));
-        }, 3000);
-      });
+    const wake = () =>
+      fetch(`${API}/health`)
+        .then((r) => r.ok && setServerReady(true))
+        .catch(() => {});
+
+    wake();
+    // Retry after 5s if first attempt fails (cold start)
+    const t = setTimeout(wake, 5000);
+    return () => clearTimeout(t);
   }, []);
 
   // ── Handler: analyse document ────────────────────────────────────────────
@@ -50,43 +49,25 @@ function App() {
     setEmailResult(null);
     setLoading(true);
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("question", question);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("question", question);
 
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", `${API}/upload`);
-    xhr.timeout = 120000;
+      const res = await fetch(`${API}/upload`, {
+        method: "POST",
+        body: formData,
+      });
 
-    xhr.onload = () => {
+      const data = await res.json();
+      if (!res.ok)
+        throw new Error(data.error || `Server error (${res.status})`);
+      setResult(data);
+    } catch (err) {
+      setError(err.message || "Failed to analyse document.");
+    } finally {
       setLoading(false);
-      try {
-        const data = JSON.parse(xhr.responseText);
-        if (xhr.status === 200 && data.success) {
-          setResult(data);
-        } else {
-          setError(data.error || `Server error (${xhr.status})`);
-        }
-      } catch {
-        setError(`Invalid response from server (${xhr.status})`);
-      }
-    };
-
-    xhr.onerror = () => {
-      setLoading(false);
-      setError(
-        `Network error uploading to ${API}. Status: ${xhr.status}, ReadyState: ${xhr.readyState}`,
-      );
-    };
-
-    xhr.ontimeout = () => {
-      setLoading(false);
-      setError(
-        "Request timed out. Server may be starting up — wait 30s and try again.",
-      );
-    };
-
-    xhr.send(formData);
+    }
   };
 
   // ── Handler: send alert email via n8n ────────────────────────────────────
@@ -99,16 +80,22 @@ function App() {
     setEmailLoading(true);
 
     try {
-      const { data } = await axios.post(`${API}/send-email`, {
-        structuredJson: result.structuredJson,
-        extractedText: result.extractedText,
-        question: result.question,
-        recipientEmail,
+      const res = await fetch(`${API}/send-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          structuredJson: result.structuredJson,
+          extractedText: result.extractedText,
+          question: result.question,
+          recipientEmail,
+        }),
       });
 
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to send email.");
       setEmailResult(data);
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to send email.");
+      setError(err.message || "Failed to send email.");
     } finally {
       setEmailLoading(false);
     }
