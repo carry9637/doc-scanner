@@ -74,12 +74,16 @@ function App() {
 
     xhr.onerror = () => {
       setLoading(false);
-      setError(`Network error uploading to ${API}. Status: ${xhr.status}, ReadyState: ${xhr.readyState}`);
+      setError(
+        `Network error uploading to ${API}. Status: ${xhr.status}, ReadyState: ${xhr.readyState}`,
+      );
     };
 
     xhr.ontimeout = () => {
       setLoading(false);
-      setError("Request timed out. Server may be starting up — wait 30s and try again.");
+      setError(
+        "Request timed out. Server may be starting up — wait 30s and try again.",
+      );
     };
 
     xhr.send(formData);
