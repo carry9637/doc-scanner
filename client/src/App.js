@@ -40,6 +40,7 @@ function App() {
 
       const { data } = await axios.post(`${API}/upload`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
+        timeout: 120000, // 2 min – Render free tier cold start takes ~60s
       });
 
       setResult(data);
