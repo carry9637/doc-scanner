@@ -4,9 +4,7 @@ import FileUpload from "./components/FileUpload";
 import ResultPanel from "./components/ResultPanel";
 import EmailSender from "./components/EmailSender";
 
-const API = process.env.REACT_APP_API_URL
-  ? "/api"
-  : "http://localhost:5000";
+const API = process.env.REACT_APP_API_URL ? "/api" : "http://localhost:5000";
 
 function App() {
   // ── Upload / Analysis state ──────────────────────────────────────────────
