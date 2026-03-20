@@ -21,9 +21,3 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# ── DocScanner additions ─────────────────────────────
-server/.env
-server/uploads/
-client/node_modules/
-server/node_modules/
