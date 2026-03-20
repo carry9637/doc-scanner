@@ -28,15 +28,23 @@ function App() {
 
   // ── Wake up Render server on page load ───────────────────────────────────
   useEffect(() => {
+    let cancelled = false;
     const wake = () =>
       fetch(`${API}/health`)
-        .then((r) => r.ok && setServerReady(true))
+        .then((r) => {
+          if (r.ok && !cancelled) setServerReady(true);
+        })
         .catch(() => {});
 
     wake();
-    // Retry after 5s if first attempt fails (cold start)
-    const t = setTimeout(wake, 5000);
-    return () => clearTimeout(t);
+    // Retry every 5s until ready (Render cold start can take 30-60s)
+    const id = setInterval(() => {
+      if (!cancelled) wake();
+    }, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, []);
 
   // ── Handler: analyse document ────────────────────────────────────────────
@@ -64,7 +72,13 @@ function App() {
         throw new Error(data.error || `Server error (${res.status})`);
       setResult(data);
     } catch (err) {
-      setError(err.message || "Failed to analyse document.");
+      const info = [
+        err.name,
+        err.message,
+        `API=${API}/upload`,
+        `online=${navigator.onLine}`,
+      ].join(" | ");
+      setError(`Analysis failed: ${info}`);
     } finally {
       setLoading(false);
     }
